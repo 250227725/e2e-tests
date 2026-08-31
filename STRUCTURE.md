@@ -11,6 +11,7 @@
 - `/implement-tc` — полный цикл реализации TC.
 - `/run-tc` — изолированный запуск TC.
 - `/update-index` — пересборка индекса TC и AA.
+- `/configure-roles` — настройка ролей и подготовленных сессий.
 
 ## Владельцы правил
 
@@ -22,6 +23,7 @@
 - `playwright-implementation.md` — архитектура Playwright-кода, реализация AA, хэши, edit-режим.
 - `selector-research.md` — исследование интерфейса, локаторы и их JSON-спецификация.
 - `diagnostics.md` — категории ошибок, статусы и отчётность.
+- `role-configuration.md` — реестр ролей и процесс `/configure-roles`.
 - `.opencode/scripts/document_authoring.py` — проверка, атомарное создание и агрегация AA/TC.
 - `.opencode/templates/` — только формы документов и отчётов.
 
@@ -35,6 +37,8 @@
 - `docs/atomic-actions/`, `docs/test-cases/` — утверждённые спецификации AA и TC с их JSON-спецификациями селекторов (`<ID>.selectors.json`). Расположение может отличаться — см. «Контекст проекта» в `AGENTS.md`.
 - `docs/index.md` — авто-генерируемый индекс TC и AA, пересобирается командой `/update-index`.
 - `docs/planned-changes.md` — запланированные, ещё не созданные сценарии; заполняется вручную.
+- `docs/roles.md` — лёгкий реестр ролей и их подготовленных сессий (не утверждённая документация).
+- `playwright/.auth/` — сохранённые состояния сессий (`storageState`) по ролям; не коммитятся.
 - `actions/` — программная реализация Atomic Action, один файл `AA-<CODE>.ts` на AA.
 - `tmp/plans/` и `tmp/plans/archive/` — файлы планов выполнения задач; не коммитятся.
 

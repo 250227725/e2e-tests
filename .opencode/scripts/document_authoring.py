@@ -59,6 +59,10 @@ TC_HASH_SECTIONS = ["Тестовые данные", "Зависимости", "
 
 SELECTOR_STRATEGIES = {"role", "label", "text", "testid", "css"}
 
+ROLES_PATH = Path("docs/roles.md")
+ROLE_HEADER_RE = re.compile(r"^##\s+(?P<name>[^(\n]+?)\s*\(`(?P<code>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`\)\s*$", re.MULTILINE)
+AA_MENTION_RE = re.compile(r"`(AA-[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`")
+
 
 @dataclass(frozen=True)
 class Issue:
@@ -219,6 +223,21 @@ def parse_dependencies(value: str) -> tuple[list[str], list[Issue]]:
     return dependencies, issues
 
 
+ROLE_REFERENCE_RE = re.compile(r"Роль:\s*`(?P<code>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`")
+
+
+def known_role_codes(project_root: Path) -> set[str]:
+    roles_path = project_root / ROLES_PATH
+    if not roles_path.is_file():
+        return set()
+    content = roles_path.read_text(encoding="utf-8")
+    return {code for code, _, _ in iter_role_blocks(content)}
+
+
+def find_referenced_roles(test_data_section: str) -> list[str]:
+    return sorted(set(ROLE_REFERENCE_RE.findall(test_data_section)))
+
+
 def validate_document(
     *,
     project_root: Path,
@@ -273,6 +292,19 @@ def validate_document(
                 if not dependency_path.is_file():
                     result.issues.append(
                         Issue("UNKNOWN_ATOMIC_ACTION", f"Atomic Action `{dependency_id}` не найден: `{dependency_path.relative_to(project_root)}`.")
+                    )
+
+        test_data_value = sections.get("Тестовые данные", "")
+        referenced_roles = find_referenced_roles(test_data_value)
+        if referenced_roles:
+            known_roles = known_role_codes(project_root)
+            for role_code in referenced_roles:
+                if role_code not in known_roles:
+                    result.issues.append(
+                        Issue(
+                            "UNKNOWN_ROLE",
+                            f"Роль `{role_code}` не найдена в `docs/roles.md`. Настройте её через `/configure-roles` перед использованием.",
+                        )
                     )
 
     placeholders = sorted(set(PLACEHOLDER_RE.findall(content)))
@@ -354,6 +386,23 @@ def compute_document_hash(project_root: Path, kind: str, document_id: str, part:
     return hashlib.sha256(digest_input).hexdigest()[:12]
 
 
+def find_role_usage(project_root: Path, role_code: str) -> list[str]:
+    """TC-документы, ссылающиеся на указанную роль (для предупреждения при удалении роли)."""
+    directory = project_root / TC_DIR
+    if not directory.is_dir():
+        return []
+    pattern = re.compile(rf"Роль:\s*`{re.escape(role_code)}`")
+    result: list[str] = []
+    for path in sorted(directory.glob("TC-*.md")):
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if pattern.search(content):
+            result.append(path.stem)
+    return result
+
+
 def find_dependents(project_root: Path, aa_id: str) -> list[str]:
     directory = project_root / TC_DIR
     if not directory.is_dir():
@@ -370,6 +419,49 @@ def find_dependents(project_root: Path, aa_id: str) -> list[str]:
         if aa_id in dependencies:
             dependents.append(path.stem)
     return dependents
+
+
+def iter_role_blocks(content: str) -> list[tuple[str, str, str]]:
+    """Return (role_code, role_name, block_text) for each role in docs/roles.md."""
+    headers = list(ROLE_HEADER_RE.finditer(content))
+    blocks: list[tuple[str, str, str]] = []
+    for index, match in enumerate(headers):
+        start = match.end()
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(content)
+        blocks.append((match.group("code"), match.group("name").strip(), content[start:end]))
+    return blocks
+
+
+def find_role_dependents(project_root: Path, aa_id: str) -> list[str]:
+    """Roles whose preparation chain mentions the given AA-ID. Empty if docs/roles.md is absent."""
+    roles_path = project_root / ROLES_PATH
+    if not roles_path.is_file():
+        return []
+    content = roles_path.read_text(encoding="utf-8")
+    result = []
+    for code, name, block in iter_role_blocks(content):
+        if aa_id in set(AA_MENTION_RE.findall(block)):
+            result.append(f"{code} — {name}")
+    return result
+
+
+def check_roles(project_root: Path) -> list[Issue]:
+    """Verify every AA mentioned in docs/roles.md actually exists."""
+    roles_path = project_root / ROLES_PATH
+    if not roles_path.is_file():
+        return [Issue("ROLES_FILE_MISSING", f"Файл `{ROLES_PATH}` не найден.")]
+    content = roles_path.read_text(encoding="utf-8")
+    issues: list[Issue] = []
+    for code, name, block in iter_role_blocks(content):
+        for aa_id in sorted(set(AA_MENTION_RE.findall(block))):
+            if not (project_root / AA_DIR / f"{aa_id}.md").is_file():
+                issues.append(
+                    Issue(
+                        "ROLE_UNKNOWN_ATOMIC_ACTION",
+                        f"Роль `{code}` ({name}) ссылается на несуществующий `{aa_id}`.",
+                    )
+                )
+    return issues
 
 
 def read_content(path_value: str) -> str:
@@ -568,6 +660,20 @@ def build_parser() -> argparse.ArgumentParser:
     dependents_parser.add_argument("--kind", choices=("aa",), required=True)
     dependents_parser.add_argument("--id", required=True, dest="document_id")
 
+    role_dependents_parser = subparsers.add_parser(
+        "role-dependents", help="Найти роли (docs/roles.md), зависящие от указанного AA"
+    )
+    role_dependents_parser.add_argument("--id", required=True, dest="document_id")
+
+    role_usage_parser = subparsers.add_parser(
+        "role-usage", help="Найти TC, ссылающиеся на указанную роль"
+    )
+    role_usage_parser.add_argument("--id", required=True, dest="document_id")
+
+    check_roles_parser = subparsers.add_parser(
+        "check-roles", help="Проверить, что все AA, упомянутые в docs/roles.md, существуют"
+    )
+
     write_selectors_parser = subparsers.add_parser(
         "write-selectors", help="Проверить и записать JSON-спецификацию селекторов"
     )
@@ -614,6 +720,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             for tc_id in find_dependents(project_root, args.document_id):
                 print(tc_id)
             return 0
+
+        if args.command == "role-dependents":
+            for entry in find_role_dependents(project_root, args.document_id):
+                print(entry)
+            return 0
+
+        if args.command == "role-usage":
+            for tc_id in find_role_usage(project_root, args.document_id):
+                print(tc_id)
+            return 0
+
+        if args.command == "check-roles":
+            issues = check_roles(project_root)
+            if not issues:
+                print("**Статус:** `OK`\n\nВсе AA, упомянутые в `docs/roles.md`, существуют.")
+                return 0
+            lines = ["**Статус:** `VALIDATION_ERROR`", "", "**Ошибки:**"]
+            lines.extend(f"- `{issue.code}` — {issue.message}" for issue in issues)
+            print("\n".join(lines))
+            return 1
 
         if args.command == "write-selectors":
             raw_content = read_content(args.content_file)

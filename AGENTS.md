@@ -143,6 +143,10 @@
 
 - `/update-index` — пересобрать `docs/index.md` по фактическому составу TC и AA.
 
+### Роли
+
+- `/configure-roles` — интерактивно добавить, изменить или удалить роль и её подготовленную сессию.
+
 ## Подключение контекста
 
 Не загружай все правила и документы заранее.
@@ -155,6 +159,7 @@
 - данные и окружение — `test-data-and-environment.md`;
 - Playwright-код — `playwright-implementation.md`;
 - интерфейс и локаторы — `selector-research.md`;
+- роли и подготовленные сессии — `role-configuration.md`;
 - диагностика — `diagnostics.md`;
 
 Для одного TC открывай только целевой TC, AA из его раздела `Зависимости`, связанные спецификации селекторов и непосредственно затронутый код.
@@ -168,6 +173,7 @@
 - данные и контекст теста — `test-data-and-environment.md`;
 - Playwright-код, реализация AA, хэши, edit-режим — `playwright-implementation.md`;
 - локаторы, селекторы и их JSON-спецификация — `selector-research.md`;
+- роли и подготовленные сессии — `role-configuration.md`;
 - ошибки, статусы и отчёты — `diagnostics.md`;
 - создание, проверка и агрегация TC/AA — `.opencode/scripts/document_authoring.py`;
 - форма документа или отчёта — соответствующий файл в `.opencode/templates/`.
