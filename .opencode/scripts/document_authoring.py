@@ -43,6 +43,7 @@ AA_SECTIONS = [
 TC_SECTIONS = [
     "Код",
     "Описание",
+    "Роль",
     "Тестовые данные",
     "Зависимости",
     "Описание сценария",
@@ -55,9 +56,12 @@ AA_HASH_SECTIONS = {
     "signature": ["Входные параметры", "Выходные данные"],
     "logic": ["Описание сценария", "Варианты успешного результата"],
 }
-TC_HASH_SECTIONS = ["Тестовые данные", "Зависимости", "Описание сценария", "Условие проверки"]
+TC_HASH_SECTIONS = ["Роль", "Тестовые данные", "Зависимости", "Описание сценария", "Условие проверки"]
 
 SELECTOR_STRATEGIES = {"role", "label", "text", "testid", "css"}
+
+ROLE_LINE_RE = re.compile(r"^`(?P<code>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`\s+—\s+.+\S\.?$")
+ROLE_NONE_TEXT = "Роль не используется."
 
 ROLES_PATH = Path("docs/roles.md")
 ROLE_HEADER_RE = re.compile(r"^##\s+(?P<name>[^(\n]+?)\s*\(`(?P<code>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`\)\s*$", re.MULTILINE)
@@ -223,9 +227,6 @@ def parse_dependencies(value: str) -> tuple[list[str], list[Issue]]:
     return dependencies, issues
 
 
-ROLE_REFERENCE_RE = re.compile(r"Роль:\s*`(?P<code>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)`")
-
-
 def known_role_codes(project_root: Path) -> set[str]:
     roles_path = project_root / ROLES_PATH
     if not roles_path.is_file():
@@ -234,8 +235,19 @@ def known_role_codes(project_root: Path) -> set[str]:
     return {code for code, _, _ in iter_role_blocks(content)}
 
 
-def find_referenced_roles(test_data_section: str) -> list[str]:
-    return sorted(set(ROLE_REFERENCE_RE.findall(test_data_section)))
+def parse_role_reference(value: str) -> tuple[str | None, list[Issue]]:
+    stripped = value.strip()
+    if stripped == ROLE_NONE_TEXT:
+        return None, []
+    match = ROLE_LINE_RE.fullmatch(stripped)
+    if not match:
+        return None, [
+            Issue(
+                "INVALID_ROLE_LINE",
+                f"Раздел `Роль` должен содержать либо `` `<ROLE-CODE>` — <Название роли>. `` либо строго «{ROLE_NONE_TEXT}».",
+            )
+        ]
+    return match.group("code"), []
 
 
 def validate_document(
@@ -294,11 +306,12 @@ def validate_document(
                         Issue("UNKNOWN_ATOMIC_ACTION", f"Atomic Action `{dependency_id}` не найден: `{dependency_path.relative_to(project_root)}`.")
                     )
 
-        test_data_value = sections.get("Тестовые данные", "")
-        referenced_roles = find_referenced_roles(test_data_value)
-        if referenced_roles:
-            known_roles = known_role_codes(project_root)
-            for role_code in referenced_roles:
+        role_value = sections.get("Роль")
+        if role_value:
+            role_code, role_issues = parse_role_reference(role_value)
+            result.issues.extend(role_issues)
+            if role_code is not None:
+                known_roles = known_role_codes(project_root)
                 if role_code not in known_roles:
                     result.issues.append(
                         Issue(
