@@ -11,7 +11,7 @@ $ARGUMENTS
 Создай ровно один новый TC.
 
 1. Выполни `python3 .opencode/scripts/document_authoring.py inventory --kind tc` и `python3 .opencode/scripts/document_authoring.py inventory --kind aa`.
-2. Собери недостающие сведения, задавая по одному вопросу.
+2. Собери недостающие сведения в диалоге, по правилам «Интерактивного режима» из `documentation-authoring.md`.
 3. После выбора семантического кода выполни `python3 .opencode/scripts/document_authoring.py next-tc-id --code <CODE>` и согласуй предложенный идентификатор.
 4. Подготовь полный текст и передай его через stdin в `python3 .opencode/scripts/document_authoring.py validate --kind tc --id <ID> --content-file -`.
 5. Покажи целевой путь и полный прошедший проверку текст, затем запроси явное подтверждение.

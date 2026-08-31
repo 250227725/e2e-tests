@@ -1,0 +1,33 @@
+{
+  "document": "TC-<CODE>-<NNN>",
+  "pages": [
+    {
+      "name": "Страница входа",
+      "route": "/login",
+      "elements": {
+        "login_button": {
+          "description": "Кнопка отправки формы входа. Доступное имя стабильно, риск не выявлен.",
+          "locator": {
+            "primary": { "strategy": "role", "role": "button", "name": "Войти" },
+            "fallback": null
+          },
+          "within": null
+        }
+      }
+    },
+    {
+      "name": "Страница заказа",
+      "route": "/orders/new",
+      "elements": {
+        "order_row_delete_button": {
+          "description": "Кнопка удаления в строке заказа. Совпадает несколько раз без указания родителя — привязана к order_row.",
+          "locator": {
+            "primary": { "strategy": "role", "role": "button", "name": "Удалить" },
+            "fallback": { "strategy": "css", "value": "[data-testid='row-delete']" }
+          },
+          "within": "order_row"
+        }
+      }
+    }
+  ]
+}

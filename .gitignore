@@ -1,0 +1,14 @@
+# Временные артефакты агента — не коммитятся
+tmp/
+
+# Секреты окружения
+.env
+.env.*
+
+# Node.js
+node_modules/
+
+# Отчёты и артефакты Playwright
+test-results/
+playwright-report/
+blob-report/

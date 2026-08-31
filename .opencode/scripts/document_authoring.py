@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and atomically create approved AA/TC Markdown documents.
+"""Validate and atomically create/update approved AA/TC Markdown documents.
 
 The script owns deterministic document-authoring checks. The OpenCode commands
 remain responsible for the interactive dialogue and explicit user approval.
@@ -8,6 +8,7 @@ remain responsible for the interactive dialogue and explicit user approval.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -42,11 +43,21 @@ AA_SECTIONS = [
 TC_SECTIONS = [
     "Код",
     "Описание",
-    "Входные данные",
+    "Тестовые данные",
     "Зависимости",
     "Описание сценария",
     "Условие проверки",
 ]
+
+# Разделы, участвующие в расчёте хэша источника (см. playwright-implementation.md).
+# "Назначение" у AA и "Описание" у TC — чисто описательные, не хэшируются.
+AA_HASH_SECTIONS = {
+    "signature": ["Входные параметры", "Выходные данные"],
+    "logic": ["Описание сценария", "Варианты успешного результата"],
+}
+TC_HASH_SECTIONS = ["Тестовые данные", "Зависимости", "Описание сценария", "Условие проверки"]
+
+SELECTOR_STRATEGIES = {"role", "label", "text", "testid", "css"}
 
 
 @dataclass(frozen=True)
@@ -80,6 +91,10 @@ def resolve_project_root(value: str | None) -> Path:
 def target_path_for(project_root: Path, kind: str, document_id: str) -> Path:
     directory = AA_DIR if kind == "aa" else TC_DIR
     return project_root / directory / f"{document_id}.md"
+
+
+def selectors_path_for(project_root: Path, kind: str, document_id: str) -> Path:
+    return target_path_for(project_root, kind, document_id).with_suffix(".selectors.json")
 
 
 def validate_identifier(kind: str, document_id: str) -> list[Issue]:
@@ -192,7 +207,7 @@ def parse_dependencies(value: str) -> tuple[list[str], list[Issue]]:
             issues.append(
                 Issue(
                     "INVALID_DEPENDENCY_LINE",
-                    "Зависимость должна иметь формат `- `AA-ID` — Название Atomic Action.`: " + line,
+                    "Зависимость должна иметь формат `- `AA-ID` — Мнемоническое название.`: " + line,
                 )
             )
             continue
@@ -211,6 +226,7 @@ def validate_document(
     document_id: str,
     content: str,
     require_target_absent: bool = True,
+    require_target_exists: bool = False,
 ) -> ValidationResult:
     target_path = target_path_for(project_root, kind, document_id)
     result = ValidationResult(
@@ -270,6 +286,9 @@ def validate_document(
     if require_target_absent and target_path.exists():
         result.issues.append(Issue("TARGET_EXISTS", f"Файл `{target_path.relative_to(project_root)}` уже существует."))
 
+    if require_target_exists and not target_path.exists():
+        result.issues.append(Issue("TARGET_MISSING", f"Файл `{target_path.relative_to(project_root)}` не найден — нечего редактировать."))
+
     return result
 
 
@@ -318,6 +337,41 @@ def next_tc_id(project_root: Path, code: str) -> str:
     return f"TC-{code}-{next_number:03d}"
 
 
+def compute_document_hash(project_root: Path, kind: str, document_id: str, part: str | None) -> str:
+    path = target_path_for(project_root, kind, document_id)
+    if not path.is_file():
+        raise ScriptExecutionError(f"Документ `{path.relative_to(project_root)}` не найден.")
+    content = path.read_text(encoding="utf-8")
+    _, _, sections, _ = split_sections(content)
+    if kind == "aa":
+        if part not in AA_HASH_SECTIONS:
+            raise ValueError("Для `--kind aa` обязателен `--part signature|logic`.")
+        section_names = AA_HASH_SECTIONS[part]
+    else:
+        section_names = TC_HASH_SECTIONS
+    parts_text = [sections.get(name, "").strip() for name in section_names]
+    digest_input = "\n\n".join(parts_text).encode("utf-8")
+    return hashlib.sha256(digest_input).hexdigest()[:12]
+
+
+def find_dependents(project_root: Path, aa_id: str) -> list[str]:
+    directory = project_root / TC_DIR
+    if not directory.is_dir():
+        raise ScriptExecutionError(f"Каталог `{directory}` не существует.")
+    dependents: list[str] = []
+    for path in sorted(directory.glob("TC-*.md")):
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        _, _, sections, _ = split_sections(content)
+        dependency_value = sections.get("Зависимости", "")
+        dependencies, _ = parse_dependencies(dependency_value)
+        if aa_id in dependencies:
+            dependents.append(path.stem)
+    return dependents
+
+
 def read_content(path_value: str) -> str:
     if path_value == "-":
         return sys.stdin.read()
@@ -330,7 +384,7 @@ def read_content(path_value: str) -> str:
 
 def render_validation(result: ValidationResult, operation: str) -> str:
     if result.ok:
-        status = "CREATED" if operation == "create" else "OK"
+        status = {"create": "CREATED", "update": "UPDATED"}.get(operation, "OK")
         try:
             display_path = result.target_path.relative_to(result.project_root).as_posix()
         except ValueError:
@@ -366,8 +420,122 @@ def create_document(result: ValidationResult, content: str) -> None:
         raise ScriptExecutionError(f"Не удалось создать `{result.target_path}`: {exc}") from exc
 
 
+def update_document(result: ValidationResult, content: str) -> None:
+    """Atomically overwrite an existing, already-approved document (used by /edit-aa, /edit-tc)."""
+    if not result.ok:
+        return
+    parent = result.target_path.parent
+    if not parent.is_dir():
+        raise ScriptExecutionError(f"Каталог `{parent}` не существует.")
+    tmp_path = result.target_path.with_suffix(result.target_path.suffix + ".tmp")
+    try:
+        tmp_path.write_text(content.rstrip() + "\n", encoding="utf-8", newline="\n")
+        os.replace(tmp_path, result.target_path)
+    except OSError as exc:
+        raise ScriptExecutionError(f"Не удалось обновить `{result.target_path}`: {exc}") from exc
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
+def validate_selector_locator(value: object, path_label: str) -> list[Issue]:
+    issues: list[Issue] = []
+    if not isinstance(value, dict):
+        issues.append(Issue("INVALID_SELECTOR_LOCATOR", f"`{path_label}` должен быть объектом."))
+        return issues
+    strategy = value.get("strategy")
+    if strategy not in SELECTOR_STRATEGIES:
+        issues.append(
+            Issue(
+                "INVALID_SELECTOR_STRATEGY",
+                f"`{path_label}.strategy` должна быть одной из: {', '.join(sorted(SELECTOR_STRATEGIES))}.",
+            )
+        )
+    return issues
+
+
+def validate_selector_document_data(document_id: str, data: object) -> list[Issue]:
+    issues: list[Issue] = []
+    if not isinstance(data, dict):
+        return [Issue("INVALID_SELECTOR_ROOT", "Документ селекторов должен быть JSON-объектом.")]
+
+    if data.get("document") != document_id:
+        issues.append(Issue("SELECTOR_DOCUMENT_MISMATCH", f"Поле `document` должно быть `{document_id}`."))
+
+    pages = data.get("pages")
+    if not isinstance(pages, list) or not pages:
+        issues.append(Issue("SELECTOR_PAGES_MISSING", "Раздел `pages` должен быть непустым списком."))
+        return issues
+
+    for page_index, page in enumerate(pages):
+        page_label = f"pages[{page_index}]"
+        if not isinstance(page, dict):
+            issues.append(Issue("INVALID_SELECTOR_PAGE", f"`{page_label}` должен быть объектом."))
+            continue
+        if not page.get("name"):
+            issues.append(Issue("SELECTOR_PAGE_NAME_MISSING", f"`{page_label}.name` не должно быть пустым."))
+        if not page.get("route"):
+            issues.append(Issue("SELECTOR_PAGE_ROUTE_MISSING", f"`{page_label}.route` не должно быть пустым."))
+
+        elements = page.get("elements")
+        if not isinstance(elements, dict) or not elements:
+            issues.append(Issue("SELECTOR_ELEMENTS_MISSING", f"`{page_label}.elements` должен быть непустым объектом."))
+            continue
+
+        for key, element in elements.items():
+            element_label = f"{page_label}.elements.{key}"
+            if not isinstance(element, dict):
+                issues.append(Issue("INVALID_SELECTOR_ELEMENT", f"`{element_label}` должен быть объектом."))
+                continue
+            if not element.get("description"):
+                issues.append(Issue("SELECTOR_DESCRIPTION_MISSING", f"`{element_label}.description` не должно быть пустым."))
+
+            locator = element.get("locator")
+            if not isinstance(locator, dict) or "primary" not in locator:
+                issues.append(Issue("SELECTOR_LOCATOR_MISSING", f"`{element_label}.locator.primary` обязателен."))
+            else:
+                issues.extend(validate_selector_locator(locator.get("primary"), f"{element_label}.locator.primary"))
+                fallback = locator.get("fallback")
+                if fallback is not None:
+                    issues.extend(validate_selector_locator(fallback, f"{element_label}.locator.fallback"))
+
+            within = element.get("within")
+            if within is not None and within not in elements:
+                issues.append(
+                    Issue(
+                        "SELECTOR_WITHIN_UNKNOWN",
+                        f"`{element_label}.within` ссылается на несуществующий ключ `{within}` на этой же странице.",
+                    )
+                )
+    return issues
+
+
+def write_selectors(project_root: Path, kind: str, document_id: str, raw_content: str) -> tuple[bool, list[Issue], Path]:
+    target = selectors_path_for(project_root, kind, document_id)
+    try:
+        data = json.loads(raw_content)
+    except json.JSONDecodeError as exc:
+        return False, [Issue("INVALID_JSON", str(exc))], target
+
+    issues = validate_selector_document_data(document_id, data)
+    if issues:
+        return False, issues, target
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target.with_suffix(target.suffix + ".tmp")
+    try:
+        tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+        os.replace(tmp_path, target)
+    except OSError as exc:
+        raise ScriptExecutionError(f"Не удалось записать `{target}`: {exc}") from exc
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+    return True, [], target
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Проверка и безопасное создание документов AA/TC")
+    parser = argparse.ArgumentParser(description="Проверка, создание, редактирование и агрегация документов AA/TC")
     parser.add_argument("--project-root", default=None)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -378,11 +546,34 @@ def build_parser() -> argparse.ArgumentParser:
     next_parser = subparsers.add_parser("next-tc-id", help="Предложить следующий свободный TC-ID")
     next_parser.add_argument("--code", required=True)
 
-    for command in ("validate", "create"):
+    for command in ("validate", "create", "update"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--kind", choices=("aa", "tc"), required=True)
         command_parser.add_argument("--id", required=True, dest="document_id")
         command_parser.add_argument("--content-file", default="-")
+        if command == "validate":
+            command_parser.add_argument(
+                "--mode",
+                choices=("create", "update"),
+                default="create",
+                help="create: целевой файл должен отсутствовать. update: целевой файл должен существовать (используется /edit-aa, /edit-tc).",
+            )
+
+    hash_parser = subparsers.add_parser("hash", help="Вычислить хэш источника документа")
+    hash_parser.add_argument("--kind", choices=("aa", "tc"), required=True)
+    hash_parser.add_argument("--id", required=True, dest="document_id")
+    hash_parser.add_argument("--part", choices=("signature", "logic"), default=None)
+
+    dependents_parser = subparsers.add_parser("dependents", help="Найти TC, зависящие от указанного AA")
+    dependents_parser.add_argument("--kind", choices=("aa",), required=True)
+    dependents_parser.add_argument("--id", required=True, dest="document_id")
+
+    write_selectors_parser = subparsers.add_parser(
+        "write-selectors", help="Проверить и записать JSON-спецификацию селекторов"
+    )
+    write_selectors_parser.add_argument("--kind", choices=("aa", "tc"), required=True)
+    write_selectors_parser.add_argument("--id", required=True, dest="document_id")
+    write_selectors_parser.add_argument("--content-file", default="-")
 
     return parser
 
@@ -415,16 +606,46 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(next_tc_id(project_root, args.code))
             return 0
 
+        if args.command == "hash":
+            print(compute_document_hash(project_root, args.kind, args.document_id, args.part))
+            return 0
+
+        if args.command == "dependents":
+            for tc_id in find_dependents(project_root, args.document_id):
+                print(tc_id)
+            return 0
+
+        if args.command == "write-selectors":
+            raw_content = read_content(args.content_file)
+            ok, issues, target = write_selectors(project_root, args.kind, args.document_id, raw_content)
+            if ok:
+                print(f"**Статус:** `WRITTEN`\n\n**Путь:** `{target.relative_to(project_root)}`\n", end="")
+                return 0
+            lines = ["**Статус:** `VALIDATION_ERROR`", "", "**Ошибки:**"]
+            lines.extend(f"- `{issue.code}` — {issue.message}" for issue in issues)
+            print("\n".join(lines))
+            return 1
+
         content = read_content(args.content_file)
+        if args.command == "validate":
+            mode = args.mode
+        else:
+            mode = args.command  # "create" or "update"
+        require_target_absent = mode == "create"
+        require_target_exists = mode == "update"
+
         result = validate_document(
             project_root=project_root,
             kind=args.kind,
             document_id=args.document_id,
             content=content,
-            require_target_absent=True,
+            require_target_absent=require_target_absent,
+            require_target_exists=require_target_exists,
         )
         if args.command == "create" and result.ok:
             create_document(result, content)
+        elif args.command == "update" and result.ok:
+            update_document(result, content)
         print(render_validation(result, args.command), end="")
         return 0 if result.ok else 1
     except ValueError as exc:

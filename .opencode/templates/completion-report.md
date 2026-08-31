@@ -1,14 +1,12 @@
 ## Статус работы
 
-`DONE | BLOCKED | FAILED`
+`DONE | FAILED`
+
+<Для статуса `BLOCKED` используй `blocked-report.md`, не этот шаблон.>
 
 ## Результат теста
 
 `PASSED | FAILED | NOT_RUN`
-
-<Для TC полного запуска при необходимости указать решение `RUN | BLOCKED`.>
-
-<Для полного запуска отдельно указать итог: `PASSED | COMPLETED_WITH_ISSUES | CONFIGURATION_ERROR | SCRIPT_ERROR`.>
 
 ## Реализовано
 

@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Selector specification",
+  "description": "JSON-спецификация селекторов для одного AA или TC. Создаётся и обновляется только на этапе /implement-tc. См. selector-research.md.",
+  "type": "object",
+  "required": ["document", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "document": {
+      "type": "string",
+      "description": "Идентификатор документа (AA-<CODE> или TC-<CODE>-<NNN>), которому принадлежит спецификация."
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/page" }
+    }
+  },
+  "definitions": {
+    "page": {
+      "type": "object",
+      "required": ["name", "route", "elements"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "route": { "type": "string", "minLength": 1 },
+        "elements": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/element" }
+        }
+      }
+    },
+    "element": {
+      "type": "object",
+      "required": ["description", "locator", "within"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Человекочитаемое описание назначения элемента, надёжности и риска — свободный текст."
+        },
+        "locator": {
+          "type": "object",
+          "required": ["primary", "fallback"],
+          "additionalProperties": false,
+          "properties": {
+            "primary": { "$ref": "#/definitions/locatorValue" },
+            "fallback": {
+              "oneOf": [{ "$ref": "#/definitions/locatorValue" }, { "type": "null" }]
+            }
+          }
+        },
+        "within": {
+          "description": "Ключ родительского элемента на той же странице, или null.",
+          "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        }
+      }
+    },
+    "locatorValue": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["role", "label", "text", "testid", "css"]
+        }
+      },
+      "description": "Дополнительные поля зависят от strategy, например role/name для 'role', value для 'css'. Проверяется скриптом на уровне strategy; конкретные параметры — на усмотрение агента, по аналогии с приоритетом локаторов из selector-research.md."
+    }
+  }
+}

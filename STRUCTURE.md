@@ -2,32 +2,53 @@
 
 ## Команды
 
+- `/init-project` — инициализация или обновление контекста проекта.
 - `/create-aa` — создание нового AA.
 - `/create-tc` — создание нового TC.
+- `/edit-aa` — изменение существующего AA.
+- `/edit-tc` — изменение существующего TC.
 - `/research-tc` — исследование TC без реализации.
 - `/implement-tc` — полный цикл реализации TC.
 - `/run-tc` — изолированный запуск TC.
+- `/update-index` — пересборка индекса TC и AA.
 
 ## Владельцы правил
 
-- `AGENTS.md` — постоянные ограничения и маршрутизация.
-- `documentation-authoring.md` — интерактивное создание документации.
+- `AGENTS.md` — постоянные ограничения, контекст проекта, маршрутизация, планирование и восстановление задачи.
+- `documentation-authoring.md` — интерактивное создание и редактирование документации.
+- `project-initialization.md` — интерактивный сбор и обновление контекста проекта.
 - `test-development.md` — процесс исследования и реализации одного TC.
 - `test-data-and-environment.md` — данные, окружение и контекст теста.
-- `playwright-implementation.md` — архитектура Playwright-кода и проверки.
-- `selector-research.md` — исследование интерфейса и локаторы.
+- `playwright-implementation.md` — архитектура Playwright-кода, реализация AA, хэши, edit-режим.
+- `selector-research.md` — исследование интерфейса, локаторы и их JSON-спецификация.
 - `diagnostics.md` — категории ошибок, статусы и отчётность.
-- `.opencode/scripts/document_authoring.py` — проверка и атомарное создание новых AA/TC.
+- `.opencode/scripts/document_authoring.py` — проверка, атомарное создание и агрегация AA/TC.
 - `.opencode/templates/` — только формы документов и отчётов.
 
 ## Исполняемые команды
 
-- `/create-aa` и `/create-tc` используют `.opencode/scripts/document_authoring.py` для инвентаризации, валидации и атомарной записи.
+- `/create-aa`, `/create-tc`, `/edit-aa`, `/edit-tc` используют `.opencode/scripts/document_authoring.py` для инвентаризации, валидации и атомарной записи.
+- `/update-index` использует `.opencode/scripts/document_authoring.py` для агрегации существующих документов.
+
+## Структура проекта
+
+- `docs/atomic-actions/`, `docs/test-cases/` — утверждённые спецификации AA и TC с их JSON-спецификациями селекторов (`<ID>.selectors.json`). Расположение может отличаться — см. «Контекст проекта» в `AGENTS.md`.
+- `docs/index.md` — авто-генерируемый индекс TC и AA, пересобирается командой `/update-index`.
+- `docs/planned-changes.md` — запланированные, ещё не созданные сценарии; заполняется вручную.
+- `actions/` — программная реализация Atomic Action, один файл `AA-<CODE>.ts` на AA.
+- `tmp/plans/` и `tmp/plans/archive/` — файлы планов выполнения задач; не коммитятся.
 
 ## Технические требования
 
-- Opencode
+- Opencode.
 - Python 3.10 или новее.
 - Python-скрипты используют только стандартную библиотеку.
 - Playwright Test установлен в целевом проекте.
-- Playwright MCP сервис доступен
+- MCP-сервис для исследования браузерного интерфейса доступен (например, Playwright MCP, ChromeDevTools MCP — конкретный сервис не фиксируется).
+
+## Рекомендуемое (не обязательное)
+
+- ESLint, Prettier — форматирование и статический анализ.
+- Faker (или аналог) — генерация тестовых данных для генерируемых групп тестовых данных TC.
+
+Выбор фиксируется в «Контексте проекта» через `/init-project`.
