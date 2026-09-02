@@ -303,7 +303,7 @@ def validate_document(
                 dependency_path = project_root / AA_DIR / f"{dependency_id}.md"
                 if not dependency_path.is_file():
                     result.issues.append(
-                        Issue("UNKNOWN_ATOMIC_ACTION", f"Atomic Action `{dependency_id}` не найден: `{dependency_path.relative_to(project_root)}`.")
+                        Issue("UNKNOWN_ATOMIC_ACTION", f"Action `{dependency_id}` не найден: `{dependency_path.relative_to(project_root)}`.")
                     )
 
         role_value = sections.get("Роль")
@@ -698,7 +698,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def render_inventory(documents: Sequence[dict[str, str]], kind: str) -> str:
-    label = "Atomic Actions" if kind == "aa" else "Test Cases"
+    label = "Actions" if kind == "aa" else "Test Cases"
     lines = [f"## {label}", ""]
     if not documents:
         return "\n".join(lines + ["Документы отсутствуют.", ""])
