@@ -3,11 +3,11 @@ description: Интерактивно изменить существующую 
 ---
 
 Используй правила из @AGENTS.md, @.opencode/instructions/documentation-authoring.md и @.opencode/instructions/playwright-implementation.md.
-Используй структуру @.opencode/templates/atomic-action.md.
+Используй структуру @.opencode/templates/action.md.
 
 Целевой Action: `$1`.
 
-1. Загрузи текущую утверждённую редакцию `docs/atomic-actions/AA-<CODE>.md`, покажи пользователю.
+1. Загрузи текущую утверждённую редакцию `docs/actions/AA-<CODE>.md`, покажи пользователю.
 2. До начала диалога правки покажи блок-радиус изменения: выполни `document_authoring.py dependents --kind aa --id AA-<CODE>` (зависимые TC) и `document_authoring.py role-dependents --id AA-<CODE>` (роли, использующие эту Action — см. `role-configuration.md`). Покажи оба списка пользователю как контекст перед началом правки, даже если они пустые.
 3. Веди диалог изменений по правилам «Интерактивного режима» из `documentation-authoring.md` (батчинг вопросов 3–5).
 4. После согласования новой редакции подготовь полный текст и передай его через stdin в `python3 .opencode/scripts/document_authoring.py validate --kind aa --id AA-<CODE> --content-file - --mode update`.

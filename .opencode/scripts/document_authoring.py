@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
 
-AA_DIR = Path("docs/atomic-actions")
+AA_DIR = Path("docs/actions")
 TC_DIR = Path("docs/test-cases")
 
 CODE_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$")
@@ -33,7 +33,6 @@ ORDERED_STEP_RE = re.compile(r"^(?P<number>\d+)\.\s+\S.*$")
 NESTED_STEP_ITEM_RE = re.compile(r"^(?: {2,}|\t+)-\s+\S.*$")
 
 AA_SECTIONS = [
-    "Код",
     "Назначение",
     "Входные параметры",
     "Описание сценария",
@@ -274,16 +273,17 @@ def validate_document(
     result.issues.extend(validate_section_order(section_names, expected_sections))
     result.issues.extend(validate_nonempty_sections(sections, expected_sections))
 
-    expected_title_prefix = f"{document_id} — "
-    if title is not None:
-        if not title.startswith(expected_title_prefix) or not title.removeprefix(expected_title_prefix).strip():
-            result.issues.append(
-                Issue("INVALID_TITLE", f"Заголовок должен иметь формат `# {document_id} — <Название>`.")
-            )
+    if kind == "tc":
+        expected_title_prefix = f"{document_id} — "
+        if title is not None:
+            if not title.startswith(expected_title_prefix) or not title.removeprefix(expected_title_prefix).strip():
+                result.issues.append(
+                    Issue("INVALID_TITLE", f"Заголовок должен иметь формат `# {document_id} — <Название>`.")
+                )
 
-    code_value = sections.get("Код", "").strip()
-    if code_value and code_value != f"`{document_id}`":
-        result.issues.append(Issue("CODE_MISMATCH", f"Раздел `Код` должен содержать только `{document_id}` в обратных кавычках."))
+        code_value = sections.get("Код", "").strip()
+        if code_value and code_value != f"`{document_id}`":
+            result.issues.append(Issue("CODE_MISMATCH", f"Раздел `Код` должен содержать только `{document_id}` в обратных кавычках."))
 
     scenario = sections.get("Описание сценария")
     if scenario:

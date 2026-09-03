@@ -48,7 +48,7 @@
 
 Формат — JSON. Создаётся и обновляется только на этапе `/implement-tc`, для TC и всех задействованных им Action. Файлы хранятся отдельно для каждого документа:
 
-- `docs/atomic-actions/AA-<CODE>.selectors.json`;
+- `docs/actions/AA-<CODE>.selectors.json`;
 - `docs/test-cases/TC-<CODE>-<NNN>.selectors.json`.
 
 Схема (см. также `.opencode/templates/selector-specification.schema.json` и пример `.opencode/templates/selector-specification.example.json`):

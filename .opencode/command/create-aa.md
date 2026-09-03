@@ -3,7 +3,7 @@ description: Интерактивно создать новую специфик
 ---
 
 Используй правила из @AGENTS.md, @.opencode/instructions/documentation-authoring.md и @.opencode/instructions/selector-research.md.
-Используй структуру @.opencode/templates/atomic-action.md.
+Используй структуру @.opencode/templates/action.md.
 
 Начальное описание пользователя:
 
@@ -17,7 +17,7 @@ $ARGUMENTS
 
 - название и назначение;
 - семантический код;
-- входные параметры и их обязательность (без формата — см. `atomic-action.md`);
+- входные параметры и их обязательность (без формата — см. `action.md`);
 - последовательность шагов;
 - варианты успешного результата;
 - ограничение времени, если это бизнес-требование;
@@ -32,7 +32,7 @@ $ARGUMENTS
 - не дублирует существующий Action с тем же смыслом.
 
 1. Выполни `python3 .opencode/scripts/document_authoring.py inventory --kind aa` для проверки уникальности кода и отсутствия дубля по смыслу.
-2. Согласуй с пользователем семантический код. Идентификатор: `AA-<CODE>`, целевой путь: `docs/atomic-actions/AA-<CODE>.md`.
+2. Согласуй с пользователем семантический код. Идентификатор: `AA-<CODE>`, целевой путь: `docs/actions/AA-<CODE>.md`.
 3. Подготовь полный текст и передай его через stdin в `python3 .opencode/scripts/document_authoring.py validate --kind aa --id AA-<CODE> --content-file -`.
 4. Покажи целевой путь и полный прошедший проверку текст, затем запроси явное подтверждение.
 5. Только после подтверждения передай тот же текст в `python3 .opencode/scripts/document_authoring.py create --kind aa --id AA-<CODE> --content-file -`.
