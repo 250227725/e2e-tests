@@ -40,7 +40,6 @@ AA_SECTIONS = [
     "Выходные данные",
 ]
 TC_SECTIONS = [
-    "Код",
     "Описание",
     "Роль",
     "Тестовые данные",
@@ -272,18 +271,6 @@ def validate_document(
     expected_sections = AA_SECTIONS if kind == "aa" else TC_SECTIONS
     result.issues.extend(validate_section_order(section_names, expected_sections))
     result.issues.extend(validate_nonempty_sections(sections, expected_sections))
-
-    if kind == "tc":
-        expected_title_prefix = f"{document_id} — "
-        if title is not None:
-            if not title.startswith(expected_title_prefix) or not title.removeprefix(expected_title_prefix).strip():
-                result.issues.append(
-                    Issue("INVALID_TITLE", f"Заголовок должен иметь формат `# {document_id} — <Название>`.")
-                )
-
-        code_value = sections.get("Код", "").strip()
-        if code_value and code_value != f"`{document_id}`":
-            result.issues.append(Issue("CODE_MISMATCH", f"Раздел `Код` должен содержать только `{document_id}` в обратных кавычках."))
 
     scenario = sections.get("Описание сценария")
     if scenario:
