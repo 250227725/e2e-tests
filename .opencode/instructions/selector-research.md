@@ -49,13 +49,13 @@
 Формат — JSON. Создаётся и обновляется только на этапе `/implement-tc`, для TC и всех задействованных им Action. Файлы хранятся отдельно для каждого документа:
 
 - `docs/actions/AA-<CODE>.selectors.json`;
-- `docs/test-cases/TC-<CODE>-<NNN>.selectors.json`.
+- `docs/test-cases/TC-<ДОМЕН>_<slug>.selectors.json`.
 
 Схема (см. также `.opencode/templates/selector-specification.schema.json` и пример `.opencode/templates/selector-specification.example.json`):
 
 ```json
 {
-  "document": "TC-<CODE>-<NNN>",
+  "document": "TC-<ДОМЕН>_<slug>",
   "pages": [
     {
       "name": "<Название страницы>",

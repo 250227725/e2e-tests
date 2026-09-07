@@ -22,7 +22,7 @@ TC_DIR = Path("docs/test-cases")
 
 CODE_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$")
 AA_ID_RE = re.compile(r"^AA-([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)$")
-TC_ID_RE = re.compile(r"^TC-([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)-(\d{3})$")
+TC_ID_RE = re.compile(r"^TC-[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*_[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 H1_RE = re.compile(r"^#\s+([^\n]+?)\s*$", re.MULTILINE)
 H2_RE = re.compile(r"^##\s+([^\n]+?)\s*$", re.MULTILINE)
 PLACEHOLDER_RE = re.compile(r"<[^>\n]+>")
@@ -107,7 +107,7 @@ def validate_identifier(kind: str, document_id: str) -> list[Issue]:
     pattern = AA_ID_RE if kind == "aa" else TC_ID_RE
     if pattern.fullmatch(document_id):
         return []
-    expected = "AA-<CODE>" if kind == "aa" else "TC-<CODE>-<NNN>"
+    expected = "AA-<CODE>" if kind == "aa" else "TC-<ДОМЕН>_<slug>"
     return [Issue("INVALID_IDENTIFIER", f"Идентификатор `{document_id}` не соответствует формату `{expected}`.")]
 
 
@@ -353,20 +353,6 @@ def inventory(project_root: Path, kind: str) -> list[dict[str, str]]:
         item["path"] = path.relative_to(project_root).as_posix()
         documents.append(item)
     return documents
-
-
-def next_tc_id(project_root: Path, code: str) -> str:
-    if not CODE_RE.fullmatch(code):
-        raise ValueError("Семантический код должен содержать только заглавные латинские буквы, цифры и дефисы.")
-    directory = project_root / TC_DIR
-    if not directory.is_dir():
-        raise ScriptExecutionError(f"Каталог `{directory}` не существует.")
-    pattern = re.compile(rf"^TC-{re.escape(code)}-(\d{{3}})\.md$")
-    numbers = [int(match.group(1)) for path in directory.iterdir() if (match := pattern.fullmatch(path.name))]
-    next_number = max(numbers, default=0) + 1
-    if next_number > 999:
-        raise ValueError(f"Для кода `{code}` закончились трёхзначные номера TC.")
-    return f"TC-{code}-{next_number:03d}"
 
 
 def compute_document_hash(project_root: Path, kind: str, document_id: str, part: str | None) -> str:
@@ -635,9 +621,6 @@ def build_parser() -> argparse.ArgumentParser:
     inventory_parser.add_argument("--kind", choices=("aa", "tc"), required=True)
     inventory_parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
 
-    next_parser = subparsers.add_parser("next-tc-id", help="Предложить следующий свободный TC-ID")
-    next_parser.add_argument("--code", required=True)
-
     for command in ("validate", "create", "update"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--kind", choices=("aa", "tc"), required=True)
@@ -706,10 +689,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(json.dumps(documents, ensure_ascii=False, indent=2))
             else:
                 print(render_inventory(documents, args.kind), end="")
-            return 0
-
-        if args.command == "next-tc-id":
-            print(next_tc_id(project_root, args.code))
             return 0
 
         if args.command == "hash":

@@ -44,7 +44,7 @@
 Для TC (файл теста):
 
 ```ts
-// source-hash: <hash> (TC-<CODE>-<NNN>.md)
+// source-hash: <hash> (TC-<ДОМЕН>_<slug>.md)
 ```
 
 Значения вычисляются через `document_authoring.py hash --kind aa --part signature|logic` и `hash --kind tc` соответственно. Состав хэшируемых разделов зафиксирован в самом скрипте (`AA_HASH_SECTIONS`, `TC_HASH_SECTIONS`) — не дублируй логику вручную.
